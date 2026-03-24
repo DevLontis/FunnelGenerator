@@ -1,13 +1,19 @@
-using System;
+using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class Generator : MonoBehaviour
 {
-    [SerializeField] private InputField TopRimDiameterInputField;
-    [SerializeField] private InputField LowerTubeDiameterInputField;
-    [SerializeField] private InputField SlopingSidesVerticalHeightInputField;
-    [SerializeField] private InputField TubeVerticalHeightInputField;
+    private const string SaveFileName = "funnel.json";
+    private const string MeshName = "Procedural Funnel";
+    private const string GameObjectName = "Funnel";
+    
+    [SerializeField] private InputField _topRimDiameterInputField;
+    [SerializeField] private InputField _lowerTubeDiameterInputField;
+    [SerializeField] private InputField _slopingSidesVerticalHeightInputField;
+    [SerializeField] private InputField _tubeVerticalHeightInputField;
+    [SerializeField] private Button _saveButton;
+    [SerializeField] private Button _loadButton;
     [SerializeField] private Material _material;
     
     private GameObject _generatedObject;
@@ -39,18 +45,18 @@ public class Generator : MonoBehaviour
         
         _mesh = new Mesh
         {
-            name = "Procedural Funnel"
+            name = MeshName
         };
     }
 
     private void Start()
     {
-        TopRimDiameterInputField.text = _topRimDiameter.ToString();
-        LowerTubeDiameterInputField.text = _lowerTubeDiameter.ToString();
-        SlopingSidesVerticalHeightInputField.text = _slopingSidesVerticalHeight.ToString();
-        TubeVerticalHeightInputField.text = _tubeVerticalHeight.ToString();
+        _topRimDiameterInputField.text = _topRimDiameter.ToString();
+        _lowerTubeDiameterInputField.text = _lowerTubeDiameter.ToString();
+        _slopingSidesVerticalHeightInputField.text = _slopingSidesVerticalHeight.ToString();
+        _tubeVerticalHeightInputField.text = _tubeVerticalHeight.ToString();
         
-        TopRimDiameterInputField.onValueChanged.AddListener(value =>
+        _topRimDiameterInputField.onValueChanged.AddListener(value =>
         {
             if (float.TryParse(value, out var result))
             {
@@ -59,7 +65,7 @@ public class Generator : MonoBehaviour
             }
         });
         
-        LowerTubeDiameterInputField.onValueChanged.AddListener(value =>
+        _lowerTubeDiameterInputField.onValueChanged.AddListener(value =>
         {
             if (float.TryParse(value, out var result))
             {
@@ -68,7 +74,7 @@ public class Generator : MonoBehaviour
             }
         });
         
-        SlopingSidesVerticalHeightInputField.onValueChanged.AddListener(value =>
+        _slopingSidesVerticalHeightInputField.onValueChanged.AddListener(value =>
         {
             if (float.TryParse(value, out var result))
             {
@@ -77,7 +83,7 @@ public class Generator : MonoBehaviour
             }
         });
         
-        TubeVerticalHeightInputField.onValueChanged.AddListener(value =>
+        _tubeVerticalHeightInputField.onValueChanged.AddListener(value =>
         {
             if (float.TryParse(value, out var result))
             {
@@ -85,6 +91,55 @@ public class Generator : MonoBehaviour
                 Generate();
             }
         });
+        
+        _saveButton.onClick.AddListener(Save);
+        _loadButton.onClick.AddListener(Load);
+    }
+
+    private void Save()
+    {
+        var shapeData = new ShapeData
+        {
+            TopRimDiameter = _topRimDiameter,
+            LowerTubeDiameter = _lowerTubeDiameter,
+            SlopingSidesVerticalHeight = _slopingSidesVerticalHeight,
+            TubeVerticalHeight = _tubeVerticalHeight
+        };
+        
+        // Save the shape data rather than the mesh data (verts etc) to keep the file human-readable and editable
+        var json = JsonUtility.ToJson(shapeData, true);
+        var path = Path.Combine(Application.persistentDataPath, SaveFileName);
+        File.WriteAllText(path, json);
+        
+        Log($"Saved to: {path}");
+    }
+
+    private void Load()
+    {
+        var path = Path.Combine(Application.persistentDataPath, SaveFileName);
+
+        if (!File.Exists(path))
+        {
+            Debug.LogWarning("Save file not found");
+            return;
+        }
+
+        var json = File.ReadAllText(path);
+        var data = JsonUtility.FromJson<ShapeData>(json);
+
+        _topRimDiameter = data.TopRimDiameter;
+        _lowerTubeDiameter = data.LowerTubeDiameter;
+        _slopingSidesVerticalHeight = data.SlopingSidesVerticalHeight;
+        _tubeVerticalHeight = data.TubeVerticalHeight;
+
+        _topRimDiameterInputField.text = _topRimDiameter.ToString();
+        _lowerTubeDiameterInputField.text = _lowerTubeDiameter.ToString();
+        _slopingSidesVerticalHeightInputField.text = _slopingSidesVerticalHeight.ToString();
+        _tubeVerticalHeightInputField.text = _tubeVerticalHeight.ToString();
+
+        Generate();
+
+        Log($"Loaded from: {path}");
     }
 
     [ContextMenu(nameof(Generate))]
@@ -252,12 +307,10 @@ public class Generator : MonoBehaviour
             _triangles[triangleIndex++] = outerNext;
             _triangles[triangleIndex++] = outerCurrent;
         }
-        
-        
 
         if (!_generatedObject)
         {
-            _generatedObject = new GameObject("Funnel", typeof(MeshFilter), typeof(MeshRenderer));
+            _generatedObject = new GameObject(GameObjectName, typeof(MeshFilter), typeof(MeshRenderer));
             _meshFilter = _generatedObject.GetComponent<MeshFilter>();
             _meshRenderer = _generatedObject.GetComponent<MeshRenderer>();
             _meshRenderer.material = _material;
@@ -271,5 +324,10 @@ public class Generator : MonoBehaviour
         _mesh.RecalculateBounds();
 
         _meshFilter.mesh = _mesh;
+    }
+    
+    private void Log(string message)
+    {
+        Debug.Log(message);
     }
 }

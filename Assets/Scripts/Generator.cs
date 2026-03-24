@@ -1,17 +1,63 @@
 using System;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class Generator : MonoBehaviour
 {
-    public float TopRimDiameter = 2f;
-    public float LowerTubeDiameter = 1f;
-    public float SlopingSidesVerticalHeight = 2f;
-    public float TubeVerticalHeight = 1f;
-    public GameObject GeneratedObject;
+    [SerializeField] private InputField TopRimDiameterInputField;
+    [SerializeField] private InputField LowerTubeDiameterInputField;
+    [SerializeField] private InputField SlopingSidesVerticalHeightInputField;
+    [SerializeField] private InputField TubeVerticalHeightInputField;
+    
+    private GameObject _generatedObject;
+    private float _topRimDiameter = 2f;
+    private float _lowerTubeDiameter = 1f;
+    private float _slopingSidesVerticalHeight = 2f;
+    private float _tubeVerticalHeight = 1f;
 
-    private void OnValidate()
+
+    private void Start()
     {
-        Generate();
+        TopRimDiameterInputField.text = _topRimDiameter.ToString();
+        LowerTubeDiameterInputField.text = _lowerTubeDiameter.ToString();
+        SlopingSidesVerticalHeightInputField.text = _slopingSidesVerticalHeight.ToString();
+        TubeVerticalHeightInputField.text = _tubeVerticalHeight.ToString();
+        
+        TopRimDiameterInputField.onValueChanged.AddListener(value =>
+        {
+            if (float.TryParse(value, out var result))
+            {
+                _topRimDiameter = result;
+                Generate();
+            }
+        });
+        
+        LowerTubeDiameterInputField.onValueChanged.AddListener(value =>
+        {
+            if (float.TryParse(value, out var result))
+            {
+                _lowerTubeDiameter = result;
+                Generate();
+            }
+        });
+        
+        SlopingSidesVerticalHeightInputField.onValueChanged.AddListener(value =>
+        {
+            if (float.TryParse(value, out var result))
+            {
+                _slopingSidesVerticalHeight = result;
+                Generate();
+            }
+        });
+        
+        TubeVerticalHeightInputField.onValueChanged.AddListener(value =>
+        {
+            if (float.TryParse(value, out var result))
+            {
+                _tubeVerticalHeight = result;
+                Generate();
+            }
+        });
     }
 
     [ContextMenu(nameof(Generate))]
@@ -19,8 +65,8 @@ public class Generator : MonoBehaviour
     {
         var sectionCount = 2; // Tube and cone
         var ringCount = sectionCount + 1; // One extra for the top of the cone
-        var ringRadii = new float[] { LowerTubeDiameter/2f, LowerTubeDiameter/2f, TopRimDiameter/2f };
-        var ringHeights = new float[] { 0f, TubeVerticalHeight, TubeVerticalHeight + SlopingSidesVerticalHeight };
+        var ringRadii = new float[] { _lowerTubeDiameter/2f, _lowerTubeDiameter/2f, _topRimDiameter/2f };
+        var ringHeights = new float[] { 0f, _tubeVerticalHeight, _tubeVerticalHeight + _slopingSidesVerticalHeight };
         var tubeSegments = 16;
         var thickness = 0.1f;
         
@@ -196,15 +242,15 @@ public class Generator : MonoBehaviour
         mesh.uv = uvs;
         mesh.RecalculateNormals();
         
-        if (!GeneratedObject)
+        if (!_generatedObject)
         {
-            GeneratedObject= new GameObject("Funnel", typeof(MeshFilter), typeof(MeshRenderer));
+            _generatedObject= new GameObject("Funnel", typeof(MeshFilter), typeof(MeshRenderer));
         }
         
-        GeneratedObject.GetComponent<MeshFilter>().mesh = mesh;
+        _generatedObject.GetComponent<MeshFilter>().mesh = mesh;
         
         // Use urp lit shader
         var material = new Material(Shader.Find($"Universal Render Pipeline/Lit"));
-        GeneratedObject.GetComponent<MeshRenderer>().material = material;
+        _generatedObject.GetComponent<MeshRenderer>().material = material;
     }
 }

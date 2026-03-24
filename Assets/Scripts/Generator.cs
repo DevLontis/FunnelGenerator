@@ -34,13 +34,20 @@ public class Generator : MonoBehaviour
         var sectionCount = 2; // Tube and cone
         var ringCount = sectionCount + 1; // One extra for the top of the cone
         var tubeSegments = 16;
-        var vertexCount = tubeSegments * ringCount * 2; // 2 for front and back faces without sharing vertices
-        vertexCount += tubeSegments * 2 * 2; // Add vertices for the top and bottom of the object
-        var triangleCount = tubeSegments * sectionCount * 2 * 3; // 2 triangles per quad, 3 indices per triangle
-        triangleCount += tubeSegments * 2 * 3 * 2*2; // Add quads for the top and bottom of the object
+        
+        var sideRingStride = tubeSegments + 1; // duplicate seam vertex
+        var sideVertexCount = sideRingStride * ringCount * 2; // outer + inner
+
+        var capVertexCount = tubeSegments * 2 * 2; // bottom outer/inner + top outer/inner
+        var vertexCount = sideVertexCount + capVertexCount;
+        
+        var sideTriangleCount = tubeSegments * sectionCount * 2 * 3 * 2; // tubeSegments quads * 2 sections * 2 triangles * 3 indices * 2 sides
+        var capTriangleCount = tubeSegments * 2 * 3 * 2; // tubeSegments quads * 2 triangles * 3 indices * 2 caps
+
+        var triangleCount = sideTriangleCount + capTriangleCount;
         
         _vertices = new Vector3[vertexCount];
-        _uvs = new Vector2[_vertices.Length];
+        _uvs = new Vector2[vertexCount];
         _triangles = new int[triangleCount]; // 6 indices per quad (2 triangles)
         
         _mesh = new Mesh
@@ -153,27 +160,34 @@ public class Generator : MonoBehaviour
         var thickness = 0.1f;
         
         var angleStep = 360f / tubeSegments;
-        
+        var sideRingStride = tubeSegments + 1;
+
         var vertexIndex = 0;
 
         for (int sideIndex = 0; sideIndex < 2; sideIndex++)
         {
-            var thicknessOffset = sideIndex == 0 ? thickness/2f : -thickness/2f;
-            
+            var thicknessOffset = sideIndex == 0 ? thickness / 2f : -thickness / 2f;
+
             for (int i = 0; i < ringCount; i++)
             {
                 var radius = ringRadii[i] + thicknessOffset;
                 var y = ringHeights[i];
 
-                for (int j = 0; j < tubeSegments; j++)
+                for (int j = 0; j <= tubeSegments; j++)
                 {
-                    var angle = j * angleStep * Mathf.Deg2Rad;
+                    var wrappedJ = j % tubeSegments;
+                    var angle = wrappedJ * angleStep * Mathf.Deg2Rad;
+
                     var x = Mathf.Cos(angle) * radius;
                     var z = Mathf.Sin(angle) * radius;
                     var vertex = new Vector3(x, y, z);
 
                     _vertices[vertexIndex] = vertex;
-                    _uvs[vertexIndex] = new Vector2((float)j / tubeSegments, (float)i / sectionCount);
+
+                    var u = j / (float)tubeSegments;
+                    var v = i / (float)(ringCount - 1);
+                    _uvs[vertexIndex] = new Vector2(u, v);
+
                     vertexIndex++;
                 }
             }
@@ -186,18 +200,16 @@ public class Generator : MonoBehaviour
         for (int sideIndex = 0; sideIndex < 2; sideIndex++)
         {
             var isInnerFace = sideIndex == 1;
+            var sideOffset = sideIndex * sideRingStride * ringCount;
             
             for (int i = 0; i < sectionCount; i++)
             {
                 for (int j = 0; j < tubeSegments; j++)
                 {
-                    var sideOffset = sideIndex * tubeSegments * ringCount;
-                    var ringOffset = i * tubeSegments;
-                    
-                    var current = sideOffset + ringOffset + j;
-                    var upperCurrent = sideOffset + (i + 1) * tubeSegments + j;
-                    var next = sideOffset + ringOffset + (j + 1) % tubeSegments;
-                    var upperNext = sideOffset + (i + 1) * tubeSegments + (j + 1) % tubeSegments;
+                    var current = sideOffset + i * sideRingStride + j;
+                    var next = current + 1;
+                    var upperCurrent = sideOffset + (i + 1) * sideRingStride + j;
+                    var upperNext = upperCurrent + 1;
                     
                     if (!isInnerFace)
                     {

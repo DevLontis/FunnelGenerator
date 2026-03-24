@@ -12,6 +12,7 @@ public class Generator : MonoBehaviour
     [SerializeField] private InputField _lowerTubeDiameterInputField;
     [SerializeField] private InputField _slopingSidesVerticalHeightInputField;
     [SerializeField] private InputField _tubeVerticalHeightInputField;
+    [SerializeField] private InputField _textureScaleInputField;
     [SerializeField] private Button _saveButton;
     [SerializeField] private Button _loadButton;
     [SerializeField] private Material _material;
@@ -24,6 +25,7 @@ public class Generator : MonoBehaviour
     private float _lowerTubeDiameter = 1f;
     private float _slopingSidesVerticalHeight = 2f;
     private float _tubeVerticalHeight = 1f;
+    private float _textureScale = 1f;
     private Vector3[] _vertices;
     private Vector2[] _uvs;
     private int[] _triangles;
@@ -99,8 +101,27 @@ public class Generator : MonoBehaviour
             }
         });
         
+        _textureScaleInputField.onValueChanged.AddListener(value =>
+        {
+            if (float.TryParse(value, out var result))
+            {
+                _textureScale = result;
+                ApplyTextureScale();
+            }
+        });
+        
         _saveButton.onClick.AddListener(Save);
         _loadButton.onClick.AddListener(Load);
+    }
+
+    private void ApplyTextureScale()
+    {
+        if (!_meshRenderer || !_meshRenderer.material || !_meshRenderer.material.mainTexture)
+        {
+            return;
+        }
+        
+        _meshRenderer.material.mainTextureScale = new Vector2(_textureScale, _textureScale);
     }
 
     private void Save()
@@ -336,6 +357,8 @@ public class Generator : MonoBehaviour
         _mesh.RecalculateBounds();
 
         _meshFilter.mesh = _mesh;
+        
+        ApplyTextureScale();
     }
     
     private void Log(string message)

@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
@@ -7,14 +8,21 @@ public class Generator : MonoBehaviour
     private const string SaveFileName = "funnel.json";
     private const string MeshName = "Procedural Funnel";
     private const string GameObjectName = "Funnel";
+    private const int RingEdgeCountResolution = 16;
+    private const int SectionCount = 2; // Tube and cone
+    private const float ShapeThickness = 0.1f;
+    private const int SideRingStride = RingEdgeCountResolution + 1; // +1 for duplicated vertex at the seam
+    private const int RingCount = SectionCount + 1; // One extra for the top of the cone
     
     [SerializeField] private InputField _topRimDiameterInputField;
     [SerializeField] private InputField _lowerTubeDiameterInputField;
     [SerializeField] private InputField _slopingSidesVerticalHeightInputField;
     [SerializeField] private InputField _tubeVerticalHeightInputField;
     [SerializeField] private InputField _textureScaleInputField;
+    [SerializeField] private Button _quitButton;
     [SerializeField] private Button _saveButton;
     [SerializeField] private Button _loadButton;
+    [SerializeField] private Button _leftRotateButton, _rightRotateButton, _upRotateButton, _downRotateButton;
     [SerializeField] private Material _material;
     
     private GameObject _generatedObject;
@@ -30,28 +38,13 @@ public class Generator : MonoBehaviour
     private Vector2[] _uvs;
     private int[] _triangles;
     private Mesh _mesh;
+    private Quaternion _targetRotation = Quaternion.identity;
+    private Vector3 _targetPosition = Vector3.zero;
 
     private void Awake()
     {
-        var sectionCount = 2; // Tube and cone
-        var ringCount = sectionCount + 1; // One extra for the top of the cone
-        var tubeSegments = 16;
-        
-        var sideRingStride = tubeSegments + 1; // duplicate seam vertex
-        var sideVertexCount = sideRingStride * ringCount * 2; // outer + inner
+        AllocateMeshData();
 
-        var capVertexCount = tubeSegments * 2 * 2; // bottom outer/inner + top outer/inner
-        var vertexCount = sideVertexCount + capVertexCount;
-        
-        var sideTriangleCount = tubeSegments * sectionCount * 2 * 3 * 2; // tubeSegments quads * 2 sections * 2 triangles * 3 indices * 2 sides
-        var capTriangleCount = tubeSegments * 2 * 3 * 2; // tubeSegments quads * 2 triangles * 3 indices * 2 caps
-
-        var triangleCount = sideTriangleCount + capTriangleCount;
-        
-        _vertices = new Vector3[vertexCount];
-        _uvs = new Vector2[vertexCount];
-        _triangles = new int[triangleCount]; // 6 indices per quad (2 triangles)
-        
         _mesh = new Mesh
         {
             name = MeshName
@@ -60,58 +53,99 @@ public class Generator : MonoBehaviour
 
     private void Start()
     {
+        RefreshInputFields();
+        BindUi();
+        Generate();
+    }
+
+    private void AllocateMeshData()
+    {
+        var sideVertexCount = SideRingStride * RingCount * 2;
+        var capVertexCount = RingEdgeCountResolution * 2 * 2;
+        var vertexCount = sideVertexCount + capVertexCount;
+
+        var sideTriangleCount = RingEdgeCountResolution * SectionCount * 2 * 3 * 2;
+        var capTriangleCount = RingEdgeCountResolution * 2 * 3 * 2;
+        var triangleCount = sideTriangleCount + capTriangleCount;
+
+        _vertices = new Vector3[vertexCount];
+        _uvs = new Vector2[vertexCount];
+        _triangles = new int[triangleCount];
+    }
+
+    private void BindUi()
+    {
+        BindFloatInput(_topRimDiameterInputField, value =>
+        {
+            _topRimDiameter = value;
+            Generate();
+        });
+
+        BindFloatInput(_lowerTubeDiameterInputField, value =>
+        {
+            _lowerTubeDiameter = value;
+            Generate();
+        });
+
+        BindFloatInput(_slopingSidesVerticalHeightInputField, value =>
+        {
+            _slopingSidesVerticalHeight = value;
+            Generate();
+        });
+
+        BindFloatInput(_tubeVerticalHeightInputField, value =>
+        {
+            _tubeVerticalHeight = value;
+            Generate();
+        });
+
+        BindFloatInput(_textureScaleInputField, value =>
+        {
+            _textureScale = Mathf.Max(0.01f, value);
+            ApplyTextureScale();
+        });
+        
+        _leftRotateButton.onClick.AddListener(() => _targetRotation *= Quaternion.Euler(0f, -15f, 0f));
+        _rightRotateButton.onClick.AddListener(() => _targetRotation *= Quaternion.Euler(0f, 15f, 0f));
+        _upRotateButton.onClick.AddListener(() => _targetRotation *= Quaternion.Euler(-15f, 0f, 0f));
+        _downRotateButton.onClick.AddListener(() => _targetRotation *= Quaternion.Euler(15f, 0f, 0f));
+        _quitButton.onClick.AddListener(Application.Quit);
+
+        _saveButton.onClick.AddListener(Save);
+        _loadButton.onClick.AddListener(Load);
+    }
+
+    private void BindFloatInput(InputField inputField, Action<float> onParsed)
+    {
+        inputField.onValueChanged.AddListener(value =>
+        {
+            if (float.TryParse(value, out var result))
+            {
+                onParsed(result);
+            }
+        });
+    }
+
+    private void Update()
+    {
+        if (_generatedObject)
+        {
+            _generatedObject.transform.rotation = Quaternion.Slerp(_generatedObject.transform.rotation, _targetRotation, Time.deltaTime * 5f);
+            
+            var boundsCenter = _meshRenderer.bounds.center;
+            // move the object centre to origin
+            var targetPosition = -boundsCenter;
+            _generatedObject.transform.position = Vector3.Lerp(_generatedObject.transform.position, targetPosition, Time.deltaTime * 5f);
+        }
+    }
+
+    private void RefreshInputFields()
+    {
         _topRimDiameterInputField.text = _topRimDiameter.ToString();
         _lowerTubeDiameterInputField.text = _lowerTubeDiameter.ToString();
         _slopingSidesVerticalHeightInputField.text = _slopingSidesVerticalHeight.ToString();
         _tubeVerticalHeightInputField.text = _tubeVerticalHeight.ToString();
-        
-        _topRimDiameterInputField.onValueChanged.AddListener(value =>
-        {
-            if (float.TryParse(value, out var result))
-            {
-                _topRimDiameter = result;
-                Generate();
-            }
-        });
-        
-        _lowerTubeDiameterInputField.onValueChanged.AddListener(value =>
-        {
-            if (float.TryParse(value, out var result))
-            {
-                _lowerTubeDiameter = result;
-                Generate();
-            }
-        });
-        
-        _slopingSidesVerticalHeightInputField.onValueChanged.AddListener(value =>
-        {
-            if (float.TryParse(value, out var result))
-            {
-                _slopingSidesVerticalHeight = result;
-                Generate();
-            }
-        });
-        
-        _tubeVerticalHeightInputField.onValueChanged.AddListener(value =>
-        {
-            if (float.TryParse(value, out var result))
-            {
-                _tubeVerticalHeight = result;
-                Generate();
-            }
-        });
-        
-        _textureScaleInputField.onValueChanged.AddListener(value =>
-        {
-            if (float.TryParse(value, out var result))
-            {
-                _textureScale = result;
-                ApplyTextureScale();
-            }
-        });
-        
-        _saveButton.onClick.AddListener(Save);
-        _loadButton.onClick.AddListener(Load);
+        _textureScaleInputField.text = _textureScale.ToString();
     }
 
     private void ApplyTextureScale()
@@ -138,8 +172,6 @@ public class Generator : MonoBehaviour
         var json = JsonUtility.ToJson(shapeData, true);
         var path = Path.Combine(Application.persistentDataPath, SaveFileName);
         File.WriteAllText(path, json);
-        
-        Log($"Saved to: {path}");
     }
 
     private void Load()
@@ -166,19 +198,17 @@ public class Generator : MonoBehaviour
         _tubeVerticalHeightInputField.text = _tubeVerticalHeight.ToString();
 
         Generate();
-
-        Log($"Loaded from: {path}");
     }
 
     [ContextMenu(nameof(Generate))]
     public void Generate()
     {
-        var sectionCount = 2; // Tube and cone
+        var sectionCount = SectionCount; // Tube and cone
         var ringCount = sectionCount + 1; // One extra for the top of the cone
         var ringRadii = new float[] { _lowerTubeDiameter/2f, _lowerTubeDiameter/2f, _topRimDiameter/2f };
         var ringHeights = new float[] { 0f, _tubeVerticalHeight, _tubeVerticalHeight + _slopingSidesVerticalHeight };
-        var tubeSegments = 16;
-        var thickness = 0.1f;
+        var tubeSegments = RingEdgeCountResolution;
+        var thickness = ShapeThickness;
         
         var angleStep = 360f / tubeSegments;
         var sideRingStride = tubeSegments + 1;
@@ -257,8 +287,6 @@ public class Generator : MonoBehaviour
         }
 
         // close the top and bottom of the object
-        var capVertexOffset = tubeSegments * ringCount * 2; // Offset for the top and bottom vertices
-        
         var bottomVertexOffset = vertexIndex; // Start of the bottom cap
         var bottomOuterOffset = bottomVertexOffset;
         var bottomInnerOffset = bottomVertexOffset + tubeSegments;
@@ -359,10 +387,5 @@ public class Generator : MonoBehaviour
         _meshFilter.mesh = _mesh;
         
         ApplyTextureScale();
-    }
-    
-    private void Log(string message)
-    {
-        Debug.Log(message);
     }
 }

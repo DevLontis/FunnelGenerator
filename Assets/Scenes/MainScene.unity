@@ -412,6 +412,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2044b0e0a9b946f3941c24f5d7b2d515, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Funnel
+  TopRimDiameter: 2.08
+  LowerTubeDiameter: 0.58
+  SlopingSidesVerticalHeight: 2
+  TubeVerticalHeight: 1
+  GeneratedObject: {fileID: 0}
 --- !u!4 &563629377
 Transform:
   m_ObjectHideFlags: 0

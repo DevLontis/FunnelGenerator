@@ -1,15 +1,27 @@
+using System;
 using UnityEngine;
 
 public class Generator : MonoBehaviour
 {
+    public float TopRimDiameter = 2f;
+    public float LowerTubeDiameter = 1f;
+    public float SlopingSidesVerticalHeight = 2f;
+    public float TubeVerticalHeight = 1f;
+    public GameObject GeneratedObject;
+
+    private void OnValidate()
+    {
+        Generate();
+    }
+
     [ContextMenu(nameof(Generate))]
     public void Generate()
     {
         var sectionCount = 2; // Tube and cone
         var ringCount = sectionCount + 1; // One extra for the top of the cone
-        var ringRadii = new float[] { 1f, 1f, 2f };
-        var ringHeights = new float[] { 0f, 1f, 2f };
-        var tubeSegments = 4;
+        var ringRadii = new float[] { LowerTubeDiameter/2f, LowerTubeDiameter/2f, TopRimDiameter/2f };
+        var ringHeights = new float[] { 0f, TubeVerticalHeight, TubeVerticalHeight + SlopingSidesVerticalHeight };
+        var tubeSegments = 16;
         var thickness = 0.1f;
         
         var mesh = new Mesh();
@@ -184,12 +196,15 @@ public class Generator : MonoBehaviour
         mesh.uv = uvs;
         mesh.RecalculateNormals();
         
-        var funnelGameObject = new GameObject("Funnel", typeof(MeshFilter), typeof(MeshRenderer));
+        if (!GeneratedObject)
+        {
+            GeneratedObject= new GameObject("Funnel", typeof(MeshFilter), typeof(MeshRenderer));
+        }
         
-        funnelGameObject.GetComponent<MeshFilter>().mesh = mesh;
+        GeneratedObject.GetComponent<MeshFilter>().mesh = mesh;
         
         // Use urp lit shader
         var material = new Material(Shader.Find($"Universal Render Pipeline/Lit"));
-        funnelGameObject.GetComponent<MeshRenderer>().material = material;
+        GeneratedObject.GetComponent<MeshRenderer>().material = material;
     }
 }

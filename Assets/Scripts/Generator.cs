@@ -8,13 +8,40 @@ public class Generator : MonoBehaviour
     [SerializeField] private InputField LowerTubeDiameterInputField;
     [SerializeField] private InputField SlopingSidesVerticalHeightInputField;
     [SerializeField] private InputField TubeVerticalHeightInputField;
+    [SerializeField] private Material _material;
     
     private GameObject _generatedObject;
+    private MeshFilter _meshFilter;
+    private MeshRenderer _meshRenderer;
+    
     private float _topRimDiameter = 2f;
     private float _lowerTubeDiameter = 1f;
     private float _slopingSidesVerticalHeight = 2f;
     private float _tubeVerticalHeight = 1f;
+    private Vector3[] _vertices;
+    private Vector2[] _uvs;
+    private int[] _triangles;
+    private Mesh _mesh;
 
+    private void Awake()
+    {
+        var sectionCount = 2; // Tube and cone
+        var ringCount = sectionCount + 1; // One extra for the top of the cone
+        var tubeSegments = 16;
+        var vertexCount = tubeSegments * ringCount * 2; // 2 for front and back faces without sharing vertices
+        vertexCount += tubeSegments * 2 * 2; // Add vertices for the top and bottom of the object
+        var triangleCount = tubeSegments * sectionCount * 2 * 3; // 2 triangles per quad, 3 indices per triangle
+        triangleCount += tubeSegments * 2 * 3 * 2*2; // Add quads for the top and bottom of the object
+        
+        _vertices = new Vector3[vertexCount];
+        _uvs = new Vector2[_vertices.Length];
+        _triangles = new int[triangleCount]; // 6 indices per quad (2 triangles)
+        
+        _mesh = new Mesh
+        {
+            name = "Procedural Funnel"
+        };
+    }
 
     private void Start()
     {
@@ -70,15 +97,6 @@ public class Generator : MonoBehaviour
         var tubeSegments = 16;
         var thickness = 0.1f;
         
-        var mesh = new Mesh();
-        var vertexCount = tubeSegments * ringCount * 2; // 2 for front and back faces without sharing vertices
-        vertexCount += tubeSegments * 2 * 2; // Add vertices for the top and bottom of the object
-        var vertices = new Vector3[vertexCount];
-        var uvs = new Vector2[vertices.Length];
-        var triangleCount = tubeSegments * sectionCount * 2 * 3; // 2 triangles per quad, 3 indices per triangle
-        triangleCount += tubeSegments * 2 * 3 * 2*2; // Add quads for the top and bottom of the object
-        var triangles = new int[triangleCount]; // 6 indices per quad (2 triangles)
-        
         var angleStep = 360f / tubeSegments;
         
         var vertexIndex = 0;
@@ -99,8 +117,8 @@ public class Generator : MonoBehaviour
                     var z = Mathf.Sin(angle) * radius;
                     var vertex = new Vector3(x, y, z);
 
-                    vertices[vertexIndex] = vertex;
-                    uvs[vertexIndex] = new Vector2((float)j / tubeSegments, (float)i / sectionCount);
+                    _vertices[vertexIndex] = vertex;
+                    _uvs[vertexIndex] = new Vector2((float)j / tubeSegments, (float)i / sectionCount);
                     vertexIndex++;
                 }
             }
@@ -128,23 +146,23 @@ public class Generator : MonoBehaviour
                     
                     if (!isInnerFace)
                     {
-                        triangles[triangleIndex++] = current;
-                        triangles[triangleIndex++] = upperCurrent;
-                        triangles[triangleIndex++] = next;
+                        _triangles[triangleIndex++] = current;
+                        _triangles[triangleIndex++] = upperCurrent;
+                        _triangles[triangleIndex++] = next;
 
-                        triangles[triangleIndex++] = next;
-                        triangles[triangleIndex++] = upperCurrent;
-                        triangles[triangleIndex++] = upperNext;
+                        _triangles[triangleIndex++] = next;
+                        _triangles[triangleIndex++] = upperCurrent;
+                        _triangles[triangleIndex++] = upperNext;
                     }
                     else
                     {
-                        triangles[triangleIndex++] = current;
-                        triangles[triangleIndex++] = next;
-                        triangles[triangleIndex++] = upperCurrent;
+                        _triangles[triangleIndex++] = current;
+                        _triangles[triangleIndex++] = next;
+                        _triangles[triangleIndex++] = upperCurrent;
 
-                        triangles[triangleIndex++] = next;
-                        triangles[triangleIndex++] = upperNext;
-                        triangles[triangleIndex++] = upperCurrent;
+                        _triangles[triangleIndex++] = next;
+                        _triangles[triangleIndex++] = upperNext;
+                        _triangles[triangleIndex++] = upperCurrent;
                     }
                 }
             }
@@ -171,8 +189,8 @@ public class Generator : MonoBehaviour
                 var z = Mathf.Sin(angle) * radius;
                 var vertex = new Vector3(x, y, z);
 
-                vertices[vertexIndex] = vertex;
-                uvs[vertexIndex] = new Vector2((float)j / tubeSegments, 1f);
+                _vertices[vertexIndex] = vertex;
+                _uvs[vertexIndex] = new Vector2((float)j / tubeSegments, 1f);
                 vertexIndex++;
             }
         }
@@ -185,13 +203,13 @@ public class Generator : MonoBehaviour
             var innerCurrent = bottomInnerOffset + j;
             var innerNext = bottomInnerOffset + (j + 1) % tubeSegments;
             
-            triangles[triangleIndex++] = innerCurrent;
-            triangles[triangleIndex++] = outerCurrent;
-            triangles[triangleIndex++] = innerNext;
+            _triangles[triangleIndex++] = innerCurrent;
+            _triangles[triangleIndex++] = outerCurrent;
+            _triangles[triangleIndex++] = innerNext;
             
-            triangles[triangleIndex++] = innerNext;
-            triangles[triangleIndex++] = outerCurrent;
-            triangles[triangleIndex++] = outerNext;
+            _triangles[triangleIndex++] = innerNext;
+            _triangles[triangleIndex++] = outerCurrent;
+            _triangles[triangleIndex++] = outerNext;
         }
         
         var topVertexOffset = vertexIndex; // Start of the top cap
@@ -212,8 +230,8 @@ public class Generator : MonoBehaviour
                 var z = Mathf.Sin(angle) * radius;
                 var vertex = new Vector3(x, y, z);
 
-                vertices[vertexIndex] = vertex;
-                uvs[vertexIndex] = new Vector2((float)j / tubeSegments, 1f);
+                _vertices[vertexIndex] = vertex;
+                _uvs[vertexIndex] = new Vector2((float)j / tubeSegments, 1f);
                 vertexIndex++;
             }
         }
@@ -226,31 +244,32 @@ public class Generator : MonoBehaviour
             var innerCurrent = topInnerOffset + j;
             var innerNext = topInnerOffset + (j + 1) % tubeSegments;
             
-            triangles[triangleIndex++] = innerCurrent;
-            triangles[triangleIndex++] = innerNext;
-            triangles[triangleIndex++] = outerCurrent;
+            _triangles[triangleIndex++] = innerCurrent;
+            _triangles[triangleIndex++] = innerNext;
+            _triangles[triangleIndex++] = outerCurrent;
             
-            triangles[triangleIndex++] = innerNext;
-            triangles[triangleIndex++] = outerNext;
-            triangles[triangleIndex++] = outerCurrent;
+            _triangles[triangleIndex++] = innerNext;
+            _triangles[triangleIndex++] = outerNext;
+            _triangles[triangleIndex++] = outerCurrent;
         }
         
         
 
-        mesh.vertices = vertices;
-        mesh.triangles = triangles;
-        mesh.uv = uvs;
-        mesh.RecalculateNormals();
-        
         if (!_generatedObject)
         {
-            _generatedObject= new GameObject("Funnel", typeof(MeshFilter), typeof(MeshRenderer));
+            _generatedObject = new GameObject("Funnel", typeof(MeshFilter), typeof(MeshRenderer));
+            _meshFilter = _generatedObject.GetComponent<MeshFilter>();
+            _meshRenderer = _generatedObject.GetComponent<MeshRenderer>();
+            _meshRenderer.material = _material;
         }
         
-        _generatedObject.GetComponent<MeshFilter>().mesh = mesh;
-        
-        // Use urp lit shader
-        var material = new Material(Shader.Find($"Universal Render Pipeline/Lit"));
-        _generatedObject.GetComponent<MeshRenderer>().material = material;
+        _mesh.Clear();
+        _mesh.vertices = _vertices;
+        _mesh.triangles = _triangles;
+        _mesh.uv = _uvs;
+        _mesh.RecalculateNormals();
+        _mesh.RecalculateBounds();
+
+        _meshFilter.mesh = _mesh;
     }
 }
